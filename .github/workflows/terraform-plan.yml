@@ -2,7 +2,7 @@ name: "Terraform Plan"
 
 on:
   push:
-    branches: [ develops,mains]
+    branches: [ develop,mains]
   workflow_dispatch:
     
 permissions:
@@ -104,6 +104,8 @@ jobs:
           TF_VAR_twilio_auth_token:      ${{ secrets.TWILIO_AUTH_TOKEN }}
           TF_VAR_twilio_whatsapp_number: ${{ secrets.TWILIO_WHATSAPP_NUMBER }}
           TF_VAR_twilio_api_url:         ${{ secrets.TWILIO_API_URL }}
+          TF_VAR_twilio_sms_number:         ${{ secrets.TWILIO_SMS_NUMBER }}
+          
       - name: Guardar ZIPs para el Apply
         uses: actions/upload-artifact@v4
         with:
