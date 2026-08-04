@@ -20,12 +20,6 @@ variable "function_name" {
   description = "nombre de la lambda"
 }
 
-variable "dynamodb_tables_json" {
-  type        = string
-  description = "JSON string con la lista de tablas de DynamoDB enviado desde GitHub"
-}
-# Se usa únicamente para configurarla dentro de la Lambda
-
 variable "runtime" {
   type        = string
   description = "runtime de la lambda"
