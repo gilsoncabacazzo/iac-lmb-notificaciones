@@ -74,13 +74,12 @@ export const handler = async (event) => {
 
     // 5. Autenticación HTTP Basic y envío a la API de Twilio
     const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
-    const twilioBody = new URLSearchParams({
-        From: fromNumber,
-        To: finalTelefono,
-        Body: mensaje
-    });
+    const twilioBody = new URLSearchParams();
+    twilioBody.append('From', fromNumber);
+    twilioBody.append('To', finalTelefono);
+    twilioBody.append('Body', mensaje);
 
-    console.log("Body enviado a twilio",twilioBody)
+    console.log("Body enviado a twilio", twilioBody.toString());
 
     const endpoint = `${twilioApiUrl}/${accountSid}/Messages.json`;
 
@@ -97,6 +96,7 @@ export const handler = async (event) => {
         const data = await response.json();
 
         if (!response.ok) {
+            console.error("Detalle del error de Twilio:", data);
             throw new Error(data.message || 'Error al enviar notificación a través de Twilio');
         }
         
