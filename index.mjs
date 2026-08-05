@@ -80,6 +80,8 @@ export const handler = async (event) => {
         Body: mensaje
     });
 
+    console.log("Body enviado a twilio",twilioBody)
+
     const endpoint = `${twilioApiUrl}/${accountSid}/Messages.json`;
 
     try {
