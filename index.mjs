@@ -22,7 +22,8 @@ export const handler = async (event) => {
     // Números específicos para cada canal
     const twilioWhatsAppNumber = process.env.TWILIO_WHATSAPP_NUMBER;
     const twilioSmsNumber = process.env.TWILIO_SMS_NUMBER;
-
+    console.log(twilioWhatsAppNumber,twilioSmsNumber);
+    
     if (!accountSid || !authToken || !twilioApiUrl) {
         return responder(500, { success: false, error: 'Faltan credenciales base de Twilio en las variables de entorno.' });
     }
