@@ -1,4 +1,6 @@
 // Método centralizado para responder con CORS, status code y body formateado
+import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+const sesClient = new SESClient({});
 const responder = (statusCode, data, headers = {}) => {
     return {
         statusCode: statusCode,
@@ -14,98 +16,66 @@ const responder = (statusCode, data, headers = {}) => {
 };
 
 export const handler = async (event) => {
-    // 1. Cargamos las credenciales y URLs compartidas
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const twilioApiUrl = process.env.TWILIO_API_URL;
-    
-    // Números específicos para cada canal
-    const twilioWhatsAppNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-    const twilioSmsNumber = process.env.TWILIO_SMS_NUMBER;
-    console.log(twilioWhatsAppNumber,twilioSmsNumber);
-    
-    if (!accountSid || !authToken || !twilioApiUrl) {
-        return responder(500, { success: false, error: 'Faltan credenciales base de Twilio en las variables de entorno.' });
-    }
-
-    // 2. Identificamos por qué path llegó la petición desde API Gateway
-    const rawPath = event.rawPath || event.path || '';
-    
-    // Validamos qué tipo de notificación es
-    const isWhatsApp = rawPath.includes('whatsapp');
-    const isSms = rawPath.includes('sms');
-
-    if (!isWhatsApp && !isSms) {
-        return responder(400, { success: false, error: 'Ruta no válida. Usa /notificaciones/whatsapp o /notificaciones/sms' });
-    }
-
-    // 3. Parseamos los datos del cuerpo de la petición
-    let bodyData;
     try {
-        bodyData = typeof event.body === 'string' ? JSON.parse(event.body) : event;
-    } catch (e) {
-        return responder(400, { success: false, error: 'El body de la petición no es un JSON válido.' });
+    // 1. Extraemos los datos del evento (pueden venir de un API Gateway, SQS o invocación directa)
+    // Si viene de API Gateway HTTP/REST, el body suele estar en event.body (parseado o como string)
+    const body = typeof event.body === "string" ? JSON.parse(event.body) : event;
+    const { to, subject, message, htmlMessage } = body;
+
+    if (!to || !subject || (!message && !htmlMessage)) {
+      return responder(400,{ error: "Faltan parámetros requeridos: 'to', 'subject' y 'message' (o 'htmlMessage')." });
     }
 
-    const telefonoDestino = bodyData.telefono;
-    const mensaje = bodyData.mensaje;
+    // 2. Definimos el correo remitente verificado en SES
+    // Asegúrate de usar el dominio o correo que verificaste (ej: no-reply@dev.docfy.shop)
+    const senderEmail = process.env.SENDER_EMAIL || "no-reply@dev.docfy.shop";
 
-    if (!telefonoDestino || !mensaje) {
-        return responder(400, { success: false, error: 'Faltan los campos "telefono" o "mensaje" en el body.' });
-    }
-
-    // 4. Preparamos los parámetros de Twilio según el canal
-    let fromNumber = '';
-    let finalTelefono = '';
-
-    if (isWhatsApp) {
-        if (!twilioWhatsAppNumber) {
-            return responder(500, { success: false, error: 'Falta configurar TWILIO_WHATSAPP_NUMBER' });
-        }
-        fromNumber = twilioWhatsAppNumber;
-        finalTelefono = `whatsapp:${telefonoDestino}`;
-    } else {
-        if (!twilioSmsNumber) {
-            return responder(500, { success: false, error: 'Falta configurar TWILIO_SMS_NUMBER' });
-        }
-        fromNumber = twilioSmsNumber;
-        finalTelefono = telefonoDestino;
-    }
-
-    // 5. Autenticación HTTP Basic y envío a la API de Twilio
-    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
-    const twilioBody = new URLSearchParams();
-    twilioBody.append('From', fromNumber);
-    twilioBody.append('To', finalTelefono);
-    twilioBody.append('Body', mensaje);
-
-    console.log("Body enviado a twilio", twilioBody.toString());
-
-    const endpoint = `${twilioApiUrl}/${accountSid}/Messages.json`;
-
-    try {
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Basic ${credentials}`,
-                'Content-Type': 'application/x-www-form-urlencoded'
+    // 3. Preparamos el comando para SES
+    const params = {
+      Source: senderEmail,
+      Destination: {
+        ToAddresses: Array.isArray(to) ? to : [to],
+      },
+      Message: {
+        Subject: {
+          Data: subject,
+          Charset: "UTF-8",
+        },
+        Body: {
+          // Puedes enviar texto plano, HTML o ambos
+          ...(message && {
+            Text: {
+              Data: message,
+              Charset: "UTF-8",
             },
-            body: twilioBody
-        });
+          }),
+          ...(htmlMessage && {
+            Html: {
+              Data: htmlMessage,
+              Charset: "UTF-8",
+            },
+          }),
+        },
+      },
+    };
 
-        const data = await response.json();
+    const command = new SendEmailCommand(params);
+    const response = await sesClient.send(command);
 
-        if (!response.ok) {
-            console.error("Detalle del error de Twilio:", data);
-            throw new Error(data.message || 'Error al enviar notificación a través de Twilio');
-        }
-        
-        return responder(200, { 
-            success: true, 
-            canal: isWhatsApp ? 'whatsapp' : 'sms', 
-            sid: data.sid 
-        });
-    } catch (error) {
-        return responder(500, { success: false, error: error.message });
-    }
+    console.log("Correo enviado con éxito. MessageId:", response.MessageId);
+
+    return (200,{
+        success: true,
+        message: "Correo enviado correctamente.",
+        messageId: response.MessageId,
+      });
+    
+  } catch (error) {
+    console.error("Error al enviar el correo con SES:", error);
+    responder(500,{
+        success: false,
+        error: error.message,
+      });
+  }
+    
 };

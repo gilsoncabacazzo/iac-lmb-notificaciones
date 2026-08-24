@@ -14,6 +14,12 @@ variable "environment" {
   default     = "dev"
   description = "Entorno de ejecución (dev, staging, production)"
 }
+variable "sender_email" {
+  type = string
+}
+variable "arn_ses" {
+  type = string
+}
 variable "function_name" {
   type        = string
   default     = "lmb-notificaciones"
